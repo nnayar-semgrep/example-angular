@@ -2,9 +2,6 @@ name: Copy npm-shrinkwrap to package-lock
 
 on:
   workflow_dispatch:  # Manual trigger
-  push:
-    paths:
-      - '**/npm-shrinkwrap.json'  # Trigger on any npm-shrinkwrap.json changes
 
 jobs:
   copy-lockfiles:
@@ -29,20 +26,26 @@ jobs:
             echo "Copied ${shrinkwrap_file} to ${dir}/package-lock.json"
           done
 
-      - name: Check for changes
-        id: check-changes
-        run: |
-          if [[ -n "$(git status --porcelain)" ]]; then
-            echo "changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "changes=false" >> $GITHUB_OUTPUT
-          fi
+  semgrep:
+    # User definable name of this GitHub Actions job.
+    name: semgrep/ci
+    # If you are self-hosting, change the following `runs-on` value:
+    runs-on: ubuntu-latest
 
-      - name: Commit and push changes
-        if: steps.check-changes.outputs.changes == 'true'
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add -A
-          git commit -m "chore: sync package-lock.json files with npm-shrinkwrap.json"
-          git push
+    container:
+      # A Docker image with Semgrep installed. Do not change this.
+      image: semgrep/semgrep
+
+    # Skip any PR created by dependabot to avoid permission issues:
+    if: (github.actor != 'dependabot[bot]')
+
+    steps:
+      # Fetch project source with GitHub Actions Checkout. Use either v3 or v4.
+      - uses: actions/checkout@v4
+      # Run the "semgrep ci" command on the command line of the docker image.
+      - run: semgrep ci
+        env:
+          # Connect to Semgrep AppSec Platform through your SEMGREP_APP_TOKEN.
+          # Generate a token from Semgrep AppSec Platform > Settings
+          # and add it to your GitHub secrets.
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
