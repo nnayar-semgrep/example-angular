@@ -1,0 +1,48 @@
+name: Copy npm-shrinkwrap to package-lock
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    paths:
+      - '**/npm-shrinkwrap.json'  # Trigger on any npm-shrinkwrap.json changes
+
+jobs:
+  copy-lockfiles:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Needed for pushing changes
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find and copy shrinkwrap files
+        run: |
+          # Find all npm-shrinkwrap.json files and process them
+          find . -name "npm-shrinkwrap.json" | while read -r shrinkwrap_file; do
+            # Get the directory containing the shrinkwrap file
+            dir=$(dirname "$shrinkwrap_file")
+            
+            # Create package-lock.json in the same directory
+            cp "$shrinkwrap_file" "${dir}/package-lock.json"
+            
+            echo "Copied ${shrinkwrap_file} to ${dir}/package-lock.json"
+          done
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check-changes.outputs.changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git commit -m "chore: sync package-lock.json files with npm-shrinkwrap.json"
+          git push
